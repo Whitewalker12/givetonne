@@ -1,4 +1,4 @@
-# CarbonGift
+# GiveTonne
 
 Gift verified carbon credits to someone. The credits are permanently retired on-chain
 in the recipient's name, and they get a shareable certificate anyone can verify.

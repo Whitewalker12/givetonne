@@ -43,8 +43,8 @@ export default async function VerifyPage({ params }: { params: Promise<{ txHash:
           >
             <strong>{allGood ? "✓ Verified." : "⚠ Mismatch."}</strong>{" "}
             {allGood
-              ? `${onChain.tonnes} tonnes retired for ${onChain.beneficiaryName}, and the on-chain record matches CarbonGift's.`
-              : "The on-chain record and CarbonGift's record differ."}
+              ? `${onChain.tonnes} tonnes retired for ${onChain.beneficiaryName}, and the on-chain record matches GiveTonne's.`
+              : "The on-chain record and GiveTonne's record differ."}
           </div>
 
           <section className="mt-8">
@@ -55,7 +55,7 @@ export default async function VerifyPage({ params }: { params: Promise<{ txHash:
           </section>
 
           <section className="mt-8">
-            <h2 className="font-semibold">Cross-check against CarbonGift</h2>
+            <h2 className="font-semibold">Cross-check against GiveTonne</h2>
             <ul className="mt-2 divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white text-sm">
               {checks.map(([label, ok]) => (
                 <li key={label} className="flex justify-between px-4 py-2">
@@ -63,7 +63,7 @@ export default async function VerifyPage({ params }: { params: Promise<{ txHash:
                   <span className={ok ? "text-emerald-700" : "text-red-600"}>{ok ? "match" : "mismatch"}</span>
                 </li>
               ))}
-              {!record ? <li className="px-4 py-2 text-stone-500">No matching gift in CarbonGift.</li> : null}
+              {!record ? <li className="px-4 py-2 text-stone-500">No matching gift in GiveTonne.</li> : null}
             </ul>
             {record ? (
               <Link href={`/gift/${record.gift.slug}`} className="mt-3 inline-block text-sm text-emerald-700 underline">

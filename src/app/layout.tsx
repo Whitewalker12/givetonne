@@ -3,7 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CarbonGift — gift a tonne of CO₂, retired in their name",
+  title: "GiveTonne — gift a tonne of CO₂, retired in their name",
   description:
     "Give verified carbon credits as a gift. Retired on-chain in the recipient's name, with a certificate anyone can verify.",
 };
@@ -15,7 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="border-b border-stone-200 bg-white/80 backdrop-blur">
           <nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
             <Link href="/" className="text-lg font-semibold tracking-tight">
-              🌱 CarbonGift
+              🌱 GiveTonne
             </Link>
             <div className="flex items-center gap-5 text-sm text-stone-600">
               <Link href="/#how" className="hover:text-stone-900">How it works</Link>
