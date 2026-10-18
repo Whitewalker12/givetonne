@@ -63,7 +63,9 @@ const projects = [
 
 async function main() {
   for (const p of projects) {
-    await prisma.project.upsert({ where: { id: p.id }, update: p, create: p });
+    // Never reset inventory on re-seed.
+    const { availableTonnes: _ignored, ...details } = p;
+    await prisma.project.upsert({ where: { id: p.id }, update: details, create: p });
   }
   console.log(`Seeded ${projects.length} projects`);
 }

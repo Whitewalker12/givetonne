@@ -41,5 +41,3 @@ yarn-error.log*
 next-env.d.ts
 
 # local data
-prisma/dev.db*
-.mockchain/

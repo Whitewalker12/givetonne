@@ -4,11 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
-    "db:setup": "prisma db push && tsx prisma/seed.ts"
+    "db:setup": "prisma db push && prisma db seed",
+    "vercel-build": "prisma generate && prisma db push --accept-data-loss && prisma db seed && next build",
+    "db:dev": "prisma dev --name givetonne"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
