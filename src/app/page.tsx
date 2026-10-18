@@ -1,69 +1,93 @@
-import Image from "next/image";
+import Link from "next/link";
+import { prisma } from "@/lib/db";
+import { formatMoney } from "@/lib/gifts";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+const steps = [
+  ["Pick a project", "Choose a verified project — forests, cookstoves, mangroves — and how many tonnes to offset."],
+  ["Write the card", "Add the recipient's name and a message. Pay by card; no crypto needed."],
+  ["We retire the credits", "The credits are permanently retired on-chain in their name. It can't be undone or resold."],
+  ["They get the certificate", "A shareable certificate page with the transaction hash. Anyone can verify it, and they can claim the NFT if they want."],
+];
+
+export default async function Home() {
+  const [projects, delivered] = await Promise.all([
+    prisma.project.findMany({ orderBy: { pricePerTonne: "asc" } }),
+    prisma.gift.aggregate({ where: { status: "delivered" }, _sum: { tonnes: true }, _count: true }),
+  ]);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="mx-auto max-w-5xl px-4">
+      <section className="py-20 text-center">
+        <p className="text-sm font-medium uppercase tracking-widest text-emerald-700">
+          The gift that disappears from the atmosphere
+        </p>
+        <h1 className="mx-auto mt-4 max-w-3xl text-5xl font-semibold tracking-tight">
+          Give a tonne of CO₂, retired in their name.
+        </h1>
+        <p className="mx-auto mt-6 max-w-2xl text-lg text-stone-600">
+          Verified carbon credits, permanently retired on a public blockchain with your
+          recipient&apos;s name on the record. A gift they can verify, share, and keep forever.
+        </p>
+        <div className="mt-8 flex justify-center gap-3">
+          <Link
+            href="/gift"
+            className="rounded-full bg-emerald-700 px-6 py-3 font-medium text-white hover:bg-emerald-800"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            Send a gift
+          </Link>
+          <Link
+            href="#how"
+            className="rounded-full border border-stone-300 px-6 py-3 font-medium hover:bg-white"
           >
-            Documentation
-          </a>
+            How it works
+          </Link>
         </div>
-      </main>
+        <p className="mt-6 text-sm text-stone-500">
+          {delivered._count} gifts sent · {(delivered._sum.tonnes ?? 0).toFixed(1)} tonnes retired
+        </p>
+      </section>
+
+      <section id="how" className="py-12">
+        <h2 className="text-2xl font-semibold">How it works</h2>
+        <ol className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {steps.map(([title, body], i) => (
+            <li key={title} className="rounded-2xl border border-stone-200 bg-white p-5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-800">
+                {i + 1}
+              </div>
+              <h3 className="mt-3 font-semibold">{title}</h3>
+              <p className="mt-1 text-sm text-stone-600">{body}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="py-12">
+        <h2 className="text-2xl font-semibold">Projects</h2>
+        <div className="mt-6 grid gap-6 sm:grid-cols-2">
+          {projects.map((p) => (
+            <Link
+              key={p.id}
+              href={`/gift?project=${p.id}`}
+              className="group rounded-2xl border border-stone-200 bg-white p-5 transition hover:border-emerald-300 hover:shadow-sm"
+            >
+              <div className="flex items-start justify-between">
+                <span className="text-4xl">{p.imageEmoji}</span>
+                <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-medium">
+                  {formatMoney(p.pricePerTonne)} / tonne
+                </span>
+              </div>
+              <h3 className="mt-3 text-lg font-semibold group-hover:text-emerald-800">{p.name}</h3>
+              <p className="text-sm text-stone-500">
+                {p.type} · {p.location} · {p.registry} {p.registryId}
+              </p>
+              <p className="mt-2 text-sm text-stone-600">{p.description}</p>
+            </Link>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

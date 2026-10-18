@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// A carbon project the gifter can choose from (mirrors a registry entry).
+model Project {
+  id             String   @id
+  name           String
+  location       String
+  type           String // e.g. "Reforestation", "Clean cookstoves"
+  registry       String // e.g. "Verra VCS"
+  registryId     String // registry project id
+  vintage        Int
+  pricePerTonne  Int // cents
+  description    String
+  imageEmoji     String
+  availableTonnes Float
+  gifts          Gift[]
+}
+
+/// One gift order: the gifter's intent, payment, and the resulting retirement.
+model Gift {
+  id             String   @id
+  slug           String   @unique
+  giverName      String
+  giverEmail     String
+  recipientName  String
+  recipientEmail String?
+  message        String
+  tonnes         Float
+  amountCents    Int
+  status         String // "pending_payment" | "retiring" | "delivered" | "failed"
+  createdAt      DateTime @default(now())
+  paymentId      String?
+  claimToken     String   @unique
+
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id])
+  retirement     Retirement?
+}
+
+/// The on-chain retirement record (mocked in the demo, Toucan/Klima later).
+model Retirement {
+  id              String   @id
+  giftId          String   @unique
+  gift            Gift     @relation(fields: [giftId], references: [id])
+  chain           String // "mock-polygon-amoy"
+  txHash          String   @unique
+  blockNumber     Int
+  contract        String
+  beneficiaryName String
+  beneficiaryMsg  String
+  tonnes          Float
+  serialRange     String // registry serial numbers retired
+  certTokenId     Int // retirement certificate NFT id
+  claimedBy       String? // wallet address once the NFT is claimed
+  retiredAt       DateTime @default(now())
+}
