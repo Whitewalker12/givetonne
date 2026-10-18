@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "./db";
 import { chain } from "./chain";
 import { charge, type CardInput } from "./payments";
+import { sendCertificate, sendReceipt } from "./email";
 
 const slugId = customAlphabet("abcdefghjkmnpqrstuvwxyz23456789", 10);
 const token = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 32);
@@ -18,6 +19,13 @@ export const giftInput = z.object({
   recipientName: z.string().trim().min(1).max(80),
   recipientEmail: z.string().trim().email().optional().or(z.literal("")),
   message: z.string().trim().max(280),
+  // "" or missing = deliver right after payment; otherwise an ISO date (YYYY-MM-DD)
+  deliverAt: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a valid date")
+    .optional()
+    .or(z.literal("")),
 });
 export type GiftInput = z.infer<typeof giftInput>;
 
@@ -27,6 +35,11 @@ export async function createGift(input: GiftInput) {
     throw new Error("Not enough credits available in this project.");
   }
   const { total } = quote(project.pricePerTonne, input.tonnes);
+  // Scheduled sends go out at 09:00 UTC on the chosen day.
+  const deliverAt = input.deliverAt ? new Date(`${input.deliverAt}T09:00:00Z`) : null;
+  if (deliverAt && deliverAt < new Date(Date.now() - 24 * 3600 * 1000)) {
+    throw new Error("Delivery date is in the past.");
+  }
   return prisma.gift.create({
     data: {
       id: `gift_${slugId()}`,
@@ -41,6 +54,7 @@ export async function createGift(input: GiftInput) {
       amountCents: total,
       status: "pending_payment",
       projectId: project.id,
+      deliverAt,
     },
   });
 }
@@ -100,7 +114,48 @@ export async function payAndRetire(giftId: string, card: CardInput) {
     throw err;
   }
 
+  // Emails are best-effort: the retirement is done, so never fail the request here.
+  try {
+    const full = await prisma.gift.findUniqueOrThrow({
+      where: { id: gift.id },
+      include: { project: true, retirement: true },
+    });
+    await sendReceipt(full);
+    if (!full.deliverAt || full.deliverAt <= new Date()) await deliver(full.id);
+  } catch (err) {
+    console.error("email failed", err);
+  }
+
   return { ok: true as const, slug: gift.slug };
+}
+
+/** Email the recipient their certificate and mark the gift delivered. */
+async function deliver(giftId: string) {
+  const full = await prisma.gift.findUniqueOrThrow({
+    where: { id: giftId },
+    include: { project: true, retirement: true },
+  });
+  if (full.deliveredAt) return false;
+  const sent = await sendCertificate(full);
+  await prisma.gift.update({ where: { id: giftId }, data: { deliveredAt: new Date() } });
+  return sent;
+}
+
+/** Cron entry point: send every scheduled certificate whose time has come. */
+export async function deliverDue() {
+  const due = await prisma.gift.findMany({
+    where: { status: "delivered", deliveredAt: null, deliverAt: { lte: new Date() } },
+    select: { id: true },
+  });
+  let sent = 0;
+  for (const { id } of due) {
+    try {
+      if (await deliver(id)) sent++;
+    } catch (err) {
+      console.error(`deliver ${id} failed`, err);
+    }
+  }
+  return sent;
 }
 
 export async function claimCertificate(slug: string, claimToken: string, wallet: string) {

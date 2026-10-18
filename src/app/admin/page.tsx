@@ -12,9 +12,10 @@ const statusColor: Record<string, string> = {
 };
 
 export default async function AdminPage() {
-  const [projects, gifts] = await Promise.all([
+  const [projects, gifts, emails] = await Promise.all([
     prisma.project.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { gifts: true } } } }),
     prisma.gift.findMany({ orderBy: { createdAt: "desc" }, take: 50, include: { project: true, retirement: true } }),
+    prisma.emailLog.findMany({ orderBy: { sentAt: "desc" }, take: 30, include: { gift: { select: { slug: true } } } }),
   ]);
   const delivered = gifts.filter((g) => g.status === "delivered");
   const revenue = delivered.reduce((s, g) => s + g.amountCents, 0);
@@ -87,6 +88,11 @@ export default async function AdminPage() {
               <td className="px-4 py-2 text-right">{formatMoney(g.amountCents)}</td>
               <td className="px-4 py-2">
                 <span className={`rounded-full px-2 py-0.5 text-xs ${statusColor[g.status] ?? ""}`}>{g.status}</span>
+                {g.status === "delivered" && !g.deliveredAt && g.deliverAt ? (
+                  <span className="ml-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800">
+                    email {g.deliverAt.toISOString().slice(0, 10)}
+                  </span>
+                ) : null}
               </td>
               <td className="px-4 py-2 font-mono text-xs">
                 {g.retirement ? (
@@ -99,6 +105,36 @@ export default async function AdminPage() {
           ))}
           {gifts.length === 0 ? (
             <tr><td colSpan={7} className="px-4 py-6 text-center text-stone-500">No gifts yet.</td></tr>
+          ) : null}
+        </tbody>
+      </table>
+
+      <h2 className="mt-10 text-xl font-semibold">Emails</h2>
+      <p className="mt-1 text-sm text-stone-500">
+        {process.env.RESEND_API_KEY ? "Sending through Resend." : "No RESEND_API_KEY set — emails are logged here instead of sent."}
+      </p>
+      <table className="mt-3 w-full overflow-hidden rounded-xl border border-stone-200 bg-white text-sm">
+        <thead className="bg-stone-50 text-left text-xs uppercase tracking-wider text-stone-500">
+          <tr>
+            <th className="px-4 py-2">When</th>
+            <th className="px-4 py-2">Kind</th>
+            <th className="px-4 py-2">To</th>
+            <th className="px-4 py-2">Subject</th>
+            <th className="px-4 py-2">Via</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-stone-100">
+          {emails.map((e) => (
+            <tr key={e.id}>
+              <td className="whitespace-nowrap px-4 py-2 text-stone-600">{e.sentAt.toISOString().slice(0, 16).replace("T", " ")}</td>
+              <td className="px-4 py-2">{e.kind}</td>
+              <td className="px-4 py-2">{e.to}</td>
+              <td className="px-4 py-2"><Link href={`/gift/${e.gift.slug}`} className="underline">{e.subject}</Link></td>
+              <td className="px-4 py-2 text-stone-600">{e.provider}</td>
+            </tr>
+          ))}
+          {emails.length === 0 ? (
+            <tr><td colSpan={5} className="px-4 py-6 text-center text-stone-500">No emails yet.</td></tr>
           ) : null}
         </tbody>
       </table>

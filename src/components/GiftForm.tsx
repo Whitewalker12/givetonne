@@ -134,7 +134,10 @@ export function GiftForm({ projects, initialProject }: { projects: Project[]; in
             Recipient&apos;s email <span className="text-stone-400">(optional)</span>
             <input name="recipientEmail" type="email" className={field} />
           </label>
-          <div />
+          <label className="text-sm font-medium">
+            Email it on <span className="text-stone-400">(leave blank to send right away)</span>
+            <input name="deliverAt" type="date" min={new Date().toISOString().slice(0, 10)} className={field} />
+          </label>
           <label className="text-sm font-medium">
             Your name
             <input name="giverName" required maxLength={80} className={field} />

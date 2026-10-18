@@ -38,10 +38,26 @@ model Gift {
   createdAt      DateTime @default(now())
   paymentId      String?
   claimToken     String   @unique
+  deliverAt      DateTime? // null = send certificate email right after payment
+  deliveredAt    DateTime? // when the recipient email went out
 
   projectId      String
   project        Project  @relation(fields: [projectId], references: [id])
   retirement     Retirement?
+  emails         EmailLog[]
+}
+
+/// Every email we send (or would send, when no RESEND_API_KEY is set).
+model EmailLog {
+  id        String   @id
+  giftId    String
+  gift      Gift     @relation(fields: [giftId], references: [id])
+  kind      String // "receipt" | "certificate"
+  to        String
+  subject   String
+  provider  String // "resend" | "console"
+  messageId String?
+  sentAt    DateTime @default(now())
 }
 
 /// The on-chain retirement record (mocked in the demo, Toucan/Klima later).
