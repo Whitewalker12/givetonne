@@ -52,7 +52,7 @@ export class MockChain implements ChainAdapter {
       },
     });
 
-    return { chain: CHAIN, txHash, blockNumber, contract: CONTRACT, serialRange, certTokenId };
+    return { tonnes: req.tonnes, chain: CHAIN, txHash, blockNumber, contract: CONTRACT, serialRange, certTokenId };
   }
 
   async lookup(txHash: string): Promise<OnChainRetirement | null> {

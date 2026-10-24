@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/gifts";
+import { chain } from "@/lib/chain";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +13,11 @@ const statusColor: Record<string, string> = {
 };
 
 export default async function AdminPage() {
-  const [projects, gifts, emails] = await Promise.all([
+  const [projects, gifts, emails, inventory] = await Promise.all([
     prisma.project.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { gifts: true } } } }),
     prisma.gift.findMany({ orderBy: { createdAt: "desc" }, take: 50, include: { project: true, retirement: true } }),
     prisma.emailLog.findMany({ orderBy: { sentAt: "desc" }, take: 30, include: { gift: { select: { slug: true } } } }),
+    chain.inventoryTonnes?.().catch(() => null) ?? Promise.resolve(null),
   ]);
   const delivered = gifts.filter((g) => g.status === "delivered");
   const revenue = delivered.reduce((s, g) => s + g.amountCents, 0);
@@ -40,6 +42,10 @@ export default async function AdminPage() {
       </div>
 
       <h2 className="mt-10 text-xl font-semibold">Credit inventory</h2>
+      <p className="mt-1 text-sm text-stone-500">
+        Chain: <span className="font-mono">{chain.name}</span>
+        {inventory !== null ? <> · operator wallet can retire <strong>{inventory.toFixed(3)} t</strong> right now</> : null}
+      </p>
       <table className="mt-3 w-full overflow-hidden rounded-xl border border-stone-200 bg-white text-sm">
         <thead className="bg-stone-50 text-left text-xs uppercase tracking-wider text-stone-500">
           <tr>

@@ -69,6 +69,12 @@ export async function payAndRetire(giftId: string, card: CardInput) {
     throw new Error("This gift has already been paid for.");
   }
 
+  // Never take money we can't fulfil: check on-chain inventory before charging.
+  const inventory = (await chain.inventoryTonnes?.()) ?? null;
+  if (inventory !== null && inventory < gift.tonnes) {
+    return { ok: false as const, error: "We're temporarily out of credits for this amount. Please try a smaller gift or come back shortly." };
+  }
+
   const payment = await charge(gift.amountCents, card);
   if (!payment.ok) return { ok: false as const, error: payment.error };
 
@@ -99,7 +105,7 @@ export async function payAndRetire(giftId: string, card: CardInput) {
           certTokenId: result.certTokenId,
           beneficiaryName: gift.recipientName,
           beneficiaryMsg: gift.message,
-          tonnes: gift.tonnes,
+          tonnes: result.tonnes,
         },
       }),
       prisma.gift.update({ where: { id: gift.id }, data: { status: "delivered" } }),

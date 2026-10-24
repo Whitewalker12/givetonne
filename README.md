@@ -8,10 +8,14 @@ in the recipient's name, and they get an emailed certificate anyone can verify.
 ## What's in the MVP
 
 - **Gift flow** — pick a project, tonnes, recipient + message, optional delivery date, pay by card.
-- **On-chain retirement** — a `GiveTonneRetirements` smart contract records each retirement
-  in the beneficiary's name and mints a certificate NFT they can claim to a wallet.
-  Runs on Polygon (Amoy testnet by default) via `viem`; falls back to an in-database
-  simulation when no wallet is configured.
+- **Real carbon credits, retired on-chain** — the operator wallet holds Toucan **NCT**
+  (tokenized Verra credits). Each gift redeems NCT → TCO2, retires it, and mints a Toucan
+  **RetirementCertificate NFT** in the recipient's name. Redemption fees are grossed up so the
+  recipient always gets at least the tonnes the gifter paid for. Inventory is checked on-chain
+  *before* the card is charged.
+- **Two lighter modes** for development: `evm` writes to GiveTonne's own record contract
+  (`GiveTonneRetirements.sol`, no credit asset behind it); the default simulation needs no
+  wallet at all.
 - **Certificate page** — `/gift/:slug`, public, with a "Verify on chain" link.
 - **Verify page** — `/verify/:txHash` reads the retirement back from the chain and
   cross-checks it against GiveTonne's own record.
@@ -39,21 +43,26 @@ emails to `/admin`. Everything else behaves exactly as in production.
 ## Go live — checklist
 
 1. **Database** — any Postgres. On Vercel: *Storage → Create Database → Neon*; it sets
-   `DATABASE_URL`. The `vercel-build` script pushes the schema and seeds projects on deploy.
-2. **Blockchain (Polygon Amoy testnet)**
+   `DATABASE_URL`. If that URL is the pooled one (host contains `-pooler`), append
+   `&pgbouncer=true`. The `vercel-build` script pushes the schema and seeds projects on deploy.
+2. **Blockchain — real credits via Toucan**
    1. Create a fresh wallet (MetaMask → new account → export private key). This is the
       backend's *operator* wallet; it signs every retirement. Never reuse a personal wallet.
-   2. Get free test MATIC: https://faucet.polygon.technology (network: Amoy).
-   3. Deploy the contract once:
-      ```bash
-      CHAIN_RPC_URL=https://rpc-amoy.polygon.technology CHAIN_OPERATOR_KEY=0x... npm run chain:deploy
-      ```
-      It prints `CHAIN_CONTRACT_ADDRESS=0x...`.
-   4. Set env vars on the host: `CHAIN_ADAPTER=evm`, `CHAIN_ID=80002`, `CHAIN_RPC_URL`,
-      `CHAIN_OPERATOR_KEY`, `CHAIN_CONTRACT_ADDRESS`. Certificates now link to
-      amoy.polygonscan.com.
-   5. Mainnet later: `CHAIN_ID=137`, a mainnet RPC, real MATIC in the operator wallet,
-      redeploy the contract.
+   2. **Testnet (Celo Alfajores):** add the Alfajores network to MetaMask, get test CELO from
+      https://faucet.celo.org, then test NCT from Toucan's faucet (docs.toucan.earth →
+      Developers → Testnet faucets).
+      **Mainnet (Polygon):** send MATIC for gas and buy NCT with USDC on Polygon (any DEX;
+      Toucan's app at app.toucan.earth also works). ~1 NCT ≈ 1 tonne; price moves with the
+      market, so reprice `Project.pricePerTonne` accordingly.
+   3. Set env vars on the host: `CHAIN_ADAPTER=toucan`, `CHAIN_ID=44787` (or `137`),
+      `CHAIN_RPC_URL`, `CHAIN_OPERATOR_KEY`. Pool/registry addresses are built in per network.
+   4. `/admin` now shows how many tonnes the wallet can still retire. Top up NCT as it sells.
+
+   *Alternative without buying credits yet* — `CHAIN_ADAPTER=evm` on Polygon Amoy: fund the
+   wallet from https://faucet.polygon.technology, run
+   `CHAIN_RPC_URL=https://rpc-amoy.polygon.technology CHAIN_OPERATOR_KEY=0x... npm run chain:deploy`,
+   and set `CHAIN_ID=80002` + the printed `CHAIN_CONTRACT_ADDRESS`. This records retirements
+   publicly but no real credit is cancelled.
 3. **Email** — sign up at resend.com, create an API key, set `RESEND_API_KEY`. To send from
    your own domain, verify it in Resend and set `EMAIL_FROM="GiveTonne <hello@yourdomain>"`.
    Set `APP_URL` to the public site URL so email links are right (Vercel fills a fallback).
@@ -62,28 +71,37 @@ emails to `/admin`. Everything else behaves exactly as in production.
 
 See `.env.example` for every variable.
 
-## Where the real credits come from
+## How the Toucan retirement works
 
-The contract is the public, beneficiary-named *record*. The credits themselves have to be
-sourced and retired at a registry. Two routes, both behind the same `ChainAdapter` interface:
+```
+operator wallet ──redeemAuto2(NCT)──▶ pool ──▶ TCO2 tokens (specific Verra vintage)
+                ──retire(TCO2)──────▶ TCO2 burned; RetirementCertificates.registerEvent()
+                ──mintCertificate(...)─▶ RetirementCertificate NFT: beneficiaryString = recipient,
+                                          retirementMessage = gift message, events = what was burned
+```
 
-- **Tokenized credits (recommended)** — buy TCO2/NCT via Toucan / KlimaDAO on Polygon with the
-  operator wallet and call their retirement aggregator with `beneficiaryName` + message; store
-  that tx alongside ours. Fully on-chain, no paperwork.
-- **Registry retirement** — buy credits from a broker, retire them on Verra / Gold Standard in
-  the recipient's name, and pass the registry serial range into `retire()` as `serialRange`.
+The certificate tx hash is what the gift page links to. `/verify` reads the certificate and its
+retirement events straight from the chain and compares them with GiveTonne's record. The NFT
+is minted to the operator and transferred to the recipient on claim.
 
-Until one of those is wired in, `serialRange` on-chain is a placeholder and the app sells
-from a seeded inventory (`Project.availableTonnes`).
+The `Project` catalogue is still used for pricing and story; which *exact* vintage the pool hands
+out is decided by Toucan's ranking (`redeemAuto2` picks the lowest-ranked eligible TCO2s). To pin
+specific projects, switch to `redeemOutMany` with chosen TCO2 addresses.
+
+Testing without a funded wallet: `contracts/testing/FakeToucan.sol` mirrors the Toucan
+interfaces; `npx tsx scripts/deploy-fake-toucan.ts` deploys them to a local node and prints
+the env vars.
 
 ## Layout
 
 ```
-contracts/GiveTonneRetirements.sol   retirement registry + certificate NFT
-scripts/compile-contract.ts          solc → src/lib/chain/GiveTonneRetirements.ts (checked in)
-scripts/deploy-contract.ts           npm run chain:deploy
+contracts/GiveTonneRetirements.sol   own retirement record + certificate NFT (evm mode)
+contracts/testing/FakeToucan.sol     local stand-ins for Toucan (tests only)
+scripts/compile-contract.ts          solc → typed ABI modules (checked in)
+scripts/deploy-contract.ts           npm run chain:deploy (evm mode)
+scripts/deploy-fake-toucan.ts        local Toucan test rig
 prisma/schema.prisma                 Project, Gift, Retirement, EmailLog, MockLedgerEntry
-src/lib/chain/                       ChainAdapter: evm.ts (real), mock.ts (simulation)
+src/lib/chain/                       ChainAdapter: toucan.ts (real credits), evm.ts, mock.ts
 src/lib/email.ts                     Resend / console delivery + templates
 src/lib/payments.ts                  charge() — swap for Stripe
 src/lib/gifts.ts                     createGift, payAndRetire, claimCertificate, deliverDue

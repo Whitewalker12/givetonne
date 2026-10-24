@@ -64,7 +64,8 @@ const projects = [
 async function main() {
   for (const p of projects) {
     // Never reset inventory on re-seed.
-    const { availableTonnes: _ignored, ...details } = p;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { availableTonnes, ...details } = p;
     await prisma.project.upsert({ where: { id: p.id }, update: details, create: p });
   }
   console.log(`Seeded ${projects.length} projects`);

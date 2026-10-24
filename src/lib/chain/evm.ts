@@ -68,6 +68,7 @@ export class EvmChain implements ChainAdapter {
     const { tokenId } = log.args;
 
     return {
+      tonnes: req.tonnes,
       chain: this.name,
       txHash: hash,
       blockNumber: Number(receipt.blockNumber),

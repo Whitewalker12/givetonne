@@ -17,6 +17,8 @@ export type RetireRequest = {
 };
 
 export type RetireResult = {
+  /** Tonnes actually retired on chain (may exceed the request slightly after fee gross-up). */
+  tonnes: number;
   chain: string;
   txHash: string;
   blockNumber: number;
@@ -43,4 +45,6 @@ export interface ChainAdapter {
   lookup(txHash: string): Promise<OnChainRetirement | null>;
   /** Transfer the certificate NFT to a wallet. */
   claimCertificate(certTokenId: number, wallet: string): Promise<{ txHash: string }>;
+  /** Tonnes the operator can still retire right now, or null when unlimited/unknown. */
+  inventoryTonnes?(): Promise<number | null>;
 }
