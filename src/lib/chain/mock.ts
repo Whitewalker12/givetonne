@@ -30,29 +30,38 @@ export class MockChain implements ChainAdapter {
   async retire(req: RetireRequest): Promise<RetireResult> {
     await sleep(1200); // pretend to wait for block confirmation
 
-    const head = await prisma.mockLedgerEntry.aggregate({
-      _max: { blockNumber: true, certTokenId: true },
-    });
-    const blockNumber = (head._max.blockNumber ?? GENESIS_BLOCK) + 1;
-    const certTokenId = (head._max.certTokenId ?? 0) + 1;
-    const txHash = hash(`${req.giftId}:${blockNumber}:${req.beneficiaryName}`);
-    const serialStart = 1_000_000 + blockNumber;
-    const serialRange = `${req.projectRegistryId}-${serialStart}-${serialStart + Math.round(req.tonnes * 1000)}`;
+    // Next block = max + 1. Concurrent retirements can pick the same number; the
+    // unique constraints reject the loser, which simply tries the next block.
+    for (let attempt = 0; ; attempt++) {
+      const head = await prisma.mockLedgerEntry.aggregate({
+        _max: { blockNumber: true, certTokenId: true },
+      });
+      const blockNumber = (head._max.blockNumber ?? GENESIS_BLOCK) + 1;
+      const certTokenId = (head._max.certTokenId ?? 0) + 1;
+      const txHash = hash(`${req.giftId}:${blockNumber}:${req.beneficiaryName}`);
+      const serialStart = 1_000_000 + blockNumber;
+      const serialRange = `${req.projectRegistryId}-${serialStart}-${serialStart + Math.round(req.tonnes * 1000)}`;
 
-    await prisma.mockLedgerEntry.create({
-      data: {
-        txHash,
-        blockNumber,
-        contract: CONTRACT,
-        serialRange,
-        certTokenId,
-        beneficiaryName: req.beneficiaryName,
-        beneficiaryMsg: req.beneficiaryMessage,
-        tonnes: req.tonnes,
-      },
-    });
-
-    return { tonnes: req.tonnes, chain: CHAIN, txHash, blockNumber, contract: CONTRACT, serialRange, certTokenId };
+      try {
+        await prisma.mockLedgerEntry.create({
+          data: {
+            txHash,
+            blockNumber,
+            contract: CONTRACT,
+            serialRange,
+            certTokenId,
+            beneficiaryName: req.beneficiaryName,
+            beneficiaryMsg: req.beneficiaryMessage,
+            tonnes: req.tonnes,
+          },
+        });
+        return { tonnes: req.tonnes, chain: CHAIN, txHash, blockNumber, contract: CONTRACT, serialRange, certTokenId };
+      } catch (err) {
+        const conflict = (err as { code?: string }).code === "P2002";
+        if (!conflict || attempt >= 20) throw err;
+        await sleep(20 + Math.random() * 80);
+      }
+    }
   }
 
   async lookup(txHash: string): Promise<OnChainRetirement | null> {

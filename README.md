@@ -40,11 +40,33 @@ Any `MM/YY` expiry and 3-digit CVC.
 With no `CHAIN_*` or `RESEND_*` env vars the app uses the simulated chain and logs
 emails to `/admin`. Everything else behaves exactly as in production.
 
+## Deploy to Cloudflare Workers (primary)
+
+The app runs on Workers through [OpenNext](https://opennext.js.org/cloudflare). Prisma uses its
+WASM engine with the `pg` driver adapter there, one connection per request (`src/lib/db.ts`).
+`worker.ts` adds an hourly Cron Trigger for scheduled emails (`wrangler.jsonc`).
+
+1. **Database** — create a free Postgres at https://neon.tech and copy the connection string
+   (`postgresql://...?sslmode=require`). Any Postgres reachable over TCP works.
+2. **Connect the repo** — Cloudflare dashboard → *Workers & Pages* → *Create* → *Import a
+   repository* → pick `givetonne`. Then set:
+   - Build command: `npx prisma db push --skip-generate && npx prisma db seed && npx opennextjs-cloudflare build`
+   - Deploy command: `npx opennextjs-cloudflare deploy`
+   - Build variables: `DATABASE_URL` (the schema push and seed run at build time)
+3. **Runtime variables & secrets** (Worker → *Settings* → *Variables and Secrets*):
+   `DATABASE_URL`, `CRON_SECRET` (any long random string), `APP_URL` (the `*.workers.dev`
+   URL or your domain), plus any of the optional ones below.
+4. Deploy. Every push to `main` redeploys.
+
+Local check in the real Workers runtime: copy `.dev.vars.example` to `.dev.vars`, then
+`npm run cf:preview`. From a terminal with `wrangler login`, `npm run cf:deploy` deploys
+directly.
+
 ## Go live — checklist
 
-1. **Database** — any Postgres. On Vercel: *Storage → Create Database → Neon*; it sets
-   `DATABASE_URL`. If that URL is the pooled one (host contains `-pooler`), append
-   `&pgbouncer=true`. The `vercel-build` script pushes the schema and seeds projects on deploy.
+1. **Database** — any Postgres (see above). On Vercel instead: *Storage → Create Database →
+   Neon*; if the URL is the pooled one (host contains `-pooler`), append `&pgbouncer=true`.
+   The `vercel-build` script pushes the schema and seeds projects on deploy.
 2. **Blockchain — real credits via Toucan**
    1. Create a fresh wallet (MetaMask → new account → export private key). This is the
       backend's *operator* wallet; it signs every retirement. Never reuse a personal wallet.
@@ -66,8 +88,9 @@ emails to `/admin`. Everything else behaves exactly as in production.
 3. **Email** — sign up at resend.com, create an API key, set `RESEND_API_KEY`. To send from
    your own domain, verify it in Resend and set `EMAIL_FROM="GiveTonne <hello@yourdomain>"`.
    Set `APP_URL` to the public site URL so email links are right (Vercel fills a fallback).
-4. **Cron** — `vercel.json` schedules `/api/cron/deliver` hourly. Vercel sets `CRON_SECRET`
-   automatically; the route rejects calls without it.
+4. **Cron** — on Cloudflare the Cron Trigger in `wrangler.jsonc` calls `/api/cron/deliver`
+   hourly with `CRON_SECRET`. On Vercel, `vercel.json` does the same and Vercel sets
+   `CRON_SECRET` itself. The route rejects calls without the secret.
 
 See `.env.example` for every variable.
 
@@ -106,5 +129,8 @@ src/lib/email.ts                     Resend / console delivery + templates
 src/lib/payments.ts                  charge() — swap for Stripe
 src/lib/gifts.ts                     createGift, payAndRetire, claimCertificate, deliverDue
 src/app/                             pages + API routes (/api/gifts, /api/cron/deliver)
+src/lib/db.ts                        Prisma: shared on Node, per-request on Workers
+worker.ts, wrangler.jsonc            Cloudflare entry (Next.js + Cron Trigger) and config
+open-next.config.ts                  OpenNext adapter config
 src/components/                      client forms
 ```

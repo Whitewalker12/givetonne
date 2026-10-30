@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "givetonne",
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // Hourly: send certificate emails whose delivery date has arrived.
+  "triggers": {
+    "crons": ["0 * * * *"]
+  },
+  "observability": {
+    "enabled": true
+  }
+  // Secrets (set in the dashboard or with `wrangler secret put`):
+  //   DATABASE_URL, CRON_SECRET, APP_URL, and optionally RESEND_API_KEY, EMAIL_FROM,
+  //   CHAIN_ADAPTER, CHAIN_ID, CHAIN_RPC_URL, CHAIN_OPERATOR_KEY, ...
+}

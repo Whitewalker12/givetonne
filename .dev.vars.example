@@ -1,0 +1,4 @@
+# Local secrets for `npm run cf:preview` (wrangler dev). Copy to .dev.vars.
+DATABASE_URL=postgres://postgres:postgres@localhost:51214/givetonne?sslmode=disable
+CRON_SECRET=change-me
+APP_URL=http://localhost:8787
